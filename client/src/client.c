@@ -75,22 +75,59 @@ int main(int argc, char *argv[])
 
 	freeaddrinfo(servinfo); // all done with this structure
 
-  int count = 10;
-  int i = 0;
-  while(1){
-	  while((numbytes = recv(sockfd, (&buf)+i, MSG_SIZE, 0)) > 0) {
-	      if(numbytes == -1){
-          perror("recv");
-	        exit(1);
-        }
-        i += numbytes;
 
-	      printf("client: received '%s'\n",buf);
-	  }
-    count--;
-  }
+	for(int i = 0; i < 20; i++){
 
-	printf("client: received '%s'\n",buf);
+	char test_buff[2048] = {'\0',};
+
+	//msg start header
+	while(strcmp(test_buff, "\n\r\r")){
+		int ret;
+		ret = recv(sockfd, test_buff, 3, 0);
+		if(ret == -1){
+			perror("recv");
+			exit(1);
+		}
+		
+		/*
+		if(recv(sockfd, test_buff, 3, 0) == -1){
+			perror("recv");
+			exit(1);
+		}
+		*/
+	}
+
+	int bytes_written = 0;
+	int ret;
+	while(1){
+		if((ret = recv(sockfd, &test_buff[bytes_written], 64, 0)) == -1){
+			perror("recv");
+			exit(1);
+		}
+		
+		bytes_written += ret;
+		if(bytes_written >= 2048 - 64){
+			perror("buffer overflow");
+			exit(1);
+		}
+
+		printf("client buffer: %s\n", test_buff);
+
+		//printf("end of buffer: %s\n", &test_buff[bytes_written-3]);
+
+		if(!strcmp("\n\n\n", &test_buff[bytes_written-3])){
+			break;
+		}
+	}
+
+	if(send(sockfd, "\n\n\r", 3, 0) == -1){
+		perror("send");
+	}
+
+	printf("client: received '%s'\n", test_buff);
+	printf("%d\n", i);
+
+	}
 
 	close(sockfd);
 

@@ -33,6 +33,44 @@ void sigchld_handler(int s)
 }
 
 
+int send_msg(int sock_fd, char *buf, int size){
+	char recv_buff[3+1];
+	int numsent = 0;
+
+	//msg start header
+	if(send(sock_fd, "\n\r\r", 3, 0) == -1){
+		perror("send");
+	}
+
+	while(numsent < size){
+		numsent += send(sock_fd, buf, size, 0);
+		if(numsent == -1) {
+			perror("send");
+			return -1;
+		}
+	}
+
+	//msg end header
+	if(send(sock_fd, "\n\n\n", 3, 0) == -1){
+		perror("send");
+	}
+
+	if(recv(sock_fd, recv_buff, 3, 0) == -1){
+		perror("recv");
+	}
+
+	recv_buff[3] = '\0';
+
+	if(!strcmp(recv_buff, "\n\n\r")){
+		return 0;
+	}
+
+	printf("server buffer: %s\n", recv_buff);
+	perror("has not recieved acknowlegment message");
+	return -1;
+}
+
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -125,9 +163,7 @@ int main(void)
 		if (!fork()) { // this is the child process
 			close(sockfd); // child doesn't need the listener
 			for(int i = 0; i < 10; i++){
-        if (send(new_fd, "Hello, world!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", 64, 0) == -1)
-          perror("send");
-        printf("sent msg\n");
+        send_msg(new_fd, "Hello, world!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", 64);
       }
 			close(new_fd);
 			exit(0);
