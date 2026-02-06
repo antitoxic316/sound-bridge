@@ -11,8 +11,11 @@
 #include <stdbool.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
 #include "sound.h"
+#include "sharedbuffer.h"
+#include "debug.h"
 
 extern struct alsa_info alsa_dev;
 
@@ -31,7 +34,7 @@ void client_listen(int *sockfd, const char* port){
 	int rv;
 
 	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags = AI_PASSIVE;
 
@@ -75,7 +78,6 @@ int recieve_data(int sockfd, uint8_t *buf, size_t n){
 		perror("recvfrom");
 		exit(1);
 	}
-	printf("ret: %d\n", ret);
 
 	return ret;
 }
@@ -89,6 +91,72 @@ void sigchld_handler(int s)
 	errno = saved_errno;
 }
 
+
+struct alsa_thread_job_args {
+	struct alsa_info *sink_info;
+	snd_pcm_t *handlep;
+	struct shared_buffer *sh_buff;
+};
+
+void *alsa_job_threaded(void *arg){
+	struct alsa_thread_job_args *job_info = arg;
+	struct alsa_info *sink_info = job_info->sink_info;
+
+	size_t tmp_buff_len = sink_info->period_time * sink_info->fmt_size * sink_info->channels_n;
+	uint8_t *tmp_buff = malloc(tmp_buff_len);
+	if(!tmp_buff){
+		perror("malloc");
+		exit(1);
+	}
+
+	while(true){
+		size_t recvd = shared_buffer_read(job_info->sh_buff, tmp_buff, tmp_buff_len, 1);
+
+		size_t nbytes = playback_data(
+			job_info->sink_info,
+			job_info->handlep, 
+			tmp_buff, 
+			recvd / sink_info->channels_n / sink_info->fmt_size
+		);
+		if(nbytes)
+			dbg_printf(DEBUG_LOG_ALSA_IO, "playbacked %ld bytes\n", nbytes);
+	}
+
+	free(tmp_buff);
+	return NULL;
+}
+
+struct inet_thread_job_args {
+	int sockfd;
+	struct shared_buffer *sh_buff;
+	size_t tmp_buff_len;
+};
+
+void *inet_job_threaded(void *arg){
+	struct inet_thread_job_args *job_info = arg;
+
+	uint8_t *tmp_buff = malloc(job_info->tmp_buff_len);
+	if(!tmp_buff){
+		perror("malloc");
+		exit(1);
+	}
+
+	while(true){
+		int	r = recieve_data(
+			job_info->sockfd, 
+			tmp_buff, 
+			job_info->tmp_buff_len
+		);
+		if(r)
+			dbg_printf(DEBUG_LOG_INET_IO, "sent %d bytes\n", r);
+
+		r = shared_buffer_write(job_info->sh_buff, tmp_buff, r, 1);
+	}
+
+	free(tmp_buff);
+	return NULL;
+}
+
 int main(int argc, char *argv[])
 {
 	struct sigaction sa;
@@ -100,27 +168,58 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	//from utils/debug.h
+	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
+
 	int sockfd;
 	const char *port = "4320";
 	
 	client_listen(&sockfd, port);
 	snd_pcm_t *handlep = init_playback_handle();
 
-	size_t buff_size = alsa_dev.period_time * alsa_dev.fmt_size * alsa_dev.channels_n;
-	uint8_t *inet_buff = malloc(buff_size);
+	struct shared_buffer *sh_buff = shared_buffer_init(alsa_dev.buffer_time);
 
+	int ret;
+	struct inet_thread_job_args inet_job_info = {
+		.sockfd = sockfd,
+		.sh_buff = sh_buff,
+		.tmp_buff_len =  alsa_dev.period_time
+	};
 
-	while(true){
-		int recvd = recieve_data(sockfd, inet_buff, buff_size);
-		printf("recvd: %d\n", recvd);
-
-		size_t nframes = recvd / alsa_dev.channels_n / alsa_dev.fmt_size;
-
-		playback_data(alsa_dev, handlep, inet_buff, nframes);
+	pthread_t inet_thread;
+	ret = pthread_create(
+		&inet_thread, 
+		NULL, 
+		inet_job_threaded, 
+		(void *) &inet_job_info
+	);
+	if(ret){
+		perror("pthread_create");
+		exit(1);
 	}
 
+	struct alsa_thread_job_args alsa_job_info = {
+		.sink_info = &alsa_dev,
+		.handlep = handlep,
+		.sh_buff = sh_buff,
+	};
 
-	free(inet_buff);
+	pthread_t alsa_thread;
+	ret = pthread_create(
+		&alsa_thread, 
+		NULL, 
+		alsa_job_threaded, 
+		(void *) &alsa_job_info
+	);
+	if(ret){
+		perror("pthread_create");
+		exit(1);
+	}
+
+	pthread_join(inet_thread, NULL); //suspend until some network error
+	pthread_join(alsa_thread, NULL);
+
+	shared_buffer_free(sh_buff);
 	close(sockfd);
 
 	return 0;

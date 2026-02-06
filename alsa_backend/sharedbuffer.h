@@ -10,6 +10,9 @@ struct shared_buffer {
   uint32_t tail;
   uint32_t head;
   uint8_t *buffer;
+
+  pthread_cond_t not_full_condition;
+  pthread_cond_t not_empty_condition;
 };
 
 

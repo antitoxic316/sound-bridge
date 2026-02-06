@@ -13,7 +13,7 @@ struct alsa_info alsa_dev = {
   .channels_n = 1,
   .fmt_size = 2,
   .period_time = 10000,
-  .buffer_time = 100000,
+  .buffer_time = 4194304,
   .format = SND_PCM_FORMAT_S16_LE,
 	.access_mode = SND_PCM_ACCESS_RW_INTERLEAVED,
   .rate = 44100
@@ -125,7 +125,7 @@ snd_pcm_t *init_playback_handle(){
 }
 
 //returns numbers of bytes read
-size_t capture_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_read){
+size_t capture_data(struct alsa_info *alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_read){
 	/* Note: ALSA Reads/Writes in number of samples! */
 	int frames_read = snd_pcm_readi(handle, buf, frames_to_read);
 	if (frames_read < 0) {
@@ -138,10 +138,10 @@ size_t capture_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, 
 		printf("ALSA State recoverd\n");
 	}
 
-	return frames_read * alsa_dev.fmt_size * alsa_dev.channels_n;
+	return frames_read * alsa_dev->fmt_size * alsa_dev->channels_n;
 }
 
-size_t playback_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_playback){
+size_t playback_data(struct alsa_info *alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_playback){
 	int written = snd_pcm_writei(handle, (void *)buf, frames_to_playback); // 16bit signet format
 
 	if(written < 0){ 
@@ -151,7 +151,8 @@ size_t playback_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf,
 			exit(2);
 		}
 		printf("ALSA State recoverd\n");
+		written = 0;
 	}
 
-	return written * alsa_dev.fmt_size * alsa_dev.channels_n;
+	return written * alsa_dev->fmt_size * alsa_dev->channels_n;
 }

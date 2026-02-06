@@ -23,8 +23,8 @@ extern struct alsa_info alsa_dev;
 
 snd_pcm_t *init_capture_handle();
 snd_pcm_t *init_playback_handle();
-size_t capture_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_capture);
-size_t playback_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_playback);
+size_t capture_data(struct alsa_info *alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_capture);
+size_t playback_data(struct alsa_info *alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_playback);
 
 
 #endif

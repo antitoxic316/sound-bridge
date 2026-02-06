@@ -16,8 +16,12 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <pthread.h>
+#include <sched.h>
 
 #include "sound.h"
+#include "sharedbuffer.h"
+#include "debug.h"
 
 extern struct alsa_info alsa_dev;
 
@@ -78,7 +82,6 @@ int send_data(int sockfd, uint8_t *buf, size_t n, struct sockaddr* dest_addr, so
 		perror("recvfrom");
 		exit(1);
 	}
-	printf("ret: %d\n", ret);
 
 	return ret;
 }
@@ -93,6 +96,72 @@ void sigchld_handler(int s)
 	errno = saved_errno;
 }
 
+struct alsa_thread_job_args {
+	struct alsa_info *sink_info;
+	snd_pcm_t *handlec;
+	struct shared_buffer *sh_buff;
+	size_t tmp_buff_len;
+};
+
+void *alsa_job_threaded(void *arg){
+	struct alsa_thread_job_args *job_info = arg;
+	struct alsa_info *sink_info = job_info->sink_info;
+
+	size_t tmp_buff_len = sink_info->period_time * sink_info->fmt_size * sink_info->channels_n;
+	uint8_t *tmp_buff = malloc(tmp_buff_len);
+	if(!tmp_buff){
+		perror("malloc");
+		exit(1);
+	}
+
+	while(true) {
+		size_t nbytes = capture_data(
+			sink_info,
+			job_info->handlec, 
+			tmp_buff, 
+			tmp_buff_len / sink_info->channels_n / sink_info->fmt_size
+		);
+		dbg_printf(DEBUG_LOG_ALSA_IO, "captured %ld bytes\n", nbytes);
+
+		nbytes = shared_buffer_write(job_info->sh_buff, tmp_buff, nbytes, 1);
+	}
+
+	free(tmp_buff);
+	return NULL;
+}
+
+struct inet_thread_job_args {
+	int sockfd;
+	struct shared_buffer *sh_buff;
+	size_t tmp_buff_len;
+	struct sockaddr *dst_addr;
+	socklen_t dst_addrlen;
+};
+
+void *inet_job_threaded(void *arg){
+	struct inet_thread_job_args *job_info = arg;
+
+	uint8_t *tmp_buff = malloc(job_info->tmp_buff_len);
+
+	while(true){
+		int ret = shared_buffer_read(job_info->sh_buff, tmp_buff, job_info->tmp_buff_len, 1);
+
+		int	r = send_data(
+			job_info->sockfd, 
+			tmp_buff, 
+			ret, 
+			job_info->dst_addr, 
+			job_info->dst_addrlen
+		);
+		//printf("sent %d bytes\n", r);
+
+	}
+
+	free(tmp_buff);
+	return NULL;
+}
+
+
 int main(int argc, char *argv[])
 {
 	struct sigaction sa;
@@ -103,6 +172,10 @@ int main(int argc, char *argv[])
 		perror("sigaction");
 		exit(1);
 	}
+
+	//from utils/debug.h
+	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
+
 
 	printf("%d\n", argc);
 
@@ -116,20 +189,54 @@ int main(int argc, char *argv[])
 
 	snd_pcm_t *handlec = init_capture_handle();	
 
-	void *read_buffer = malloc(alsa_dev.period_time * alsa_dev.fmt_size * alsa_dev.channels_n);
-	uint32_t frames_to_capture = alsa_dev.period_time;
+	struct shared_buffer *sh_buff = shared_buffer_init(alsa_dev.buffer_time);
 
-	while(true){
-		size_t nbytes = capture_data(alsa_dev, handlec, read_buffer, frames_to_capture);
-		printf("captured %d bytes\n", nbytes);
+	int ret;
 
-		int	r = send_data(sockfd, read_buffer, nbytes, &cli_addr, cli_addrlen);
-		printf("sent %d bytes\n", nbytes);
+	struct alsa_thread_job_args alsa_job_info = {
+		.sink_info = &alsa_dev,
+		.handlec = handlec,
+		.sh_buff = sh_buff,
+	};
+
+	pthread_t alsa_thread;
+	ret = pthread_create(
+		&alsa_thread, 
+		NULL, 
+		alsa_job_threaded, 
+		(void *) &alsa_job_info
+	);
+	if(ret){
+		perror("pthread_create");
+		exit(1);
 	}
 
-	
-	free(read_buffer);
+
+	struct inet_thread_job_args inet_job_info = {
+		.sockfd = sockfd,
+		.dst_addr = &cli_addr,
+		.dst_addrlen = cli_addrlen,
+		.tmp_buff_len = alsa_dev.period_time,
+		.sh_buff = sh_buff,
+	};
+
+	pthread_t inet_thread;
+	ret = pthread_create(
+		&inet_thread, 
+		NULL, 
+		inet_job_threaded, 
+		(void *) &inet_job_info
+	);
+	if(ret){
+		perror("pthread_create");
+		exit(1);
+	}
+
+	pthread_join(inet_thread, NULL); //suspend until some network error
+	pthread_join(alsa_thread, NULL);
+
 	close(sockfd);
+	shared_buffer_free(sh_buff);
 	
 	return 0;
 }

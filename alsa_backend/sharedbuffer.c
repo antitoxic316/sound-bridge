@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #include "sharedbuffer.h"
-
+#include "debug.h"
 
 struct shared_buffer *shared_buffer_init(uint32_t shbuff_size){
   struct shared_buffer *shbuff = malloc(sizeof(*shbuff));
@@ -16,6 +16,8 @@ struct shared_buffer *shared_buffer_init(uint32_t shbuff_size){
   }
 
   pthread_mutex_init(&shbuff->mutex, NULL);
+  pthread_cond_init(&shbuff->not_empty_condition, NULL);
+  pthread_cond_init(&shbuff->not_full_condition, NULL);
 
   shbuff->buffersize = shbuff_size;
   shbuff->buffer = malloc(shbuff_size);
@@ -28,6 +30,9 @@ struct shared_buffer *shared_buffer_init(uint32_t shbuff_size){
   shbuff->head = 0;
 
   return shbuff;
+
+  //from utils/debug.h
+  debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
 }
 
 void shared_buffer_free(struct shared_buffer *shbuff){
@@ -48,9 +53,11 @@ int shared_buffer_write(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_
   uint32_t to_write = smemb * count; 
 
   if((shbuff->head+1) % shbuff->buffersize == shbuff->tail){ //full
-    printf("full\n");
-    to_write = 0;
-    goto buff_write_done;
+    ret = pthread_cond_wait(&shbuff->not_full_condition, &shbuff->mutex);
+    if(ret) {
+      perror("pthread_cond_wait");
+      exit(1);
+    }
   }
 
   if(shbuff->head >= shbuff->tail){
@@ -81,12 +88,18 @@ int shared_buffer_write(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_
   }
 
 buff_write_done:
+  ret = pthread_cond_signal(&shbuff->not_empty_condition);
+  if(ret) {
+    perror("pthread_cond_signal");
+    exit(-1);
+  }
   ret = pthread_mutex_unlock(&shbuff->mutex);
   if(ret){
     perror("pthread_mutex_unlock");
     exit(-1);
   }  
 
+  dbg_printf(DEBUG_LOG_SHAREDBUFFER_IO, "sharedbuffer: written %d\n", to_write);
   return to_write;
 }
 
@@ -101,12 +114,17 @@ int shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_
   uint32_t to_read = smemb * count; 
 
   if(shbuff->tail == shbuff->head){ //empty
-    to_read = 0;
-    goto buff_read_done;
+    pthread_cond_wait(&shbuff->not_empty_condition, &shbuff->mutex);
+    if(ret) {
+      perror("pthread_cond_wait");
+      exit(1);
+    }
   }
 
   if(shbuff->tail > shbuff->head){
     uint32_t capacity = shbuff->buffersize - (shbuff->tail - shbuff->head);
+
+    dbg_printf(DEBUG_LOG_SHAREDBUFFER_IO, "capacity: %d\n", capacity);
 
     if(capacity < to_read){
       to_read = capacity;
@@ -124,6 +142,8 @@ int shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_
   } else if (shbuff->tail < shbuff->head){
     uint32_t capacity = shbuff->head - shbuff->tail;
 
+    //dbg_printf(DEBUG_LOG_SHAREDBUFFER_IO, "capacity: %d\n", capacity);
+
     if(capacity < to_read){
       to_read = capacity;
     }
@@ -133,12 +153,18 @@ int shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_
   }
 
 buff_read_done:
+  ret = pthread_cond_signal(&shbuff->not_full_condition);
+  if(ret) {
+    perror("pthread_cond_signal");
+    exit(-1);
+  }
   ret = pthread_mutex_unlock(&shbuff->mutex);
   if(ret){
     perror("pthread_mutex_unlock");
     exit(-1);
   }  
 
+  dbg_printf(DEBUG_LOG_SHAREDBUFFER_IO, "sharedbuffer: read %d\n", to_read);
   return to_read;
 }
 
