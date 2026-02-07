@@ -8,6 +8,8 @@
 #include "sharedbuffer.h"
 #include "debug.h"
 
+#define SINGLE_OP_MAX_SIZE 256
+
 struct shared_buffer *shared_buffer_init(uint32_t shbuff_size){
   struct shared_buffer *shbuff = malloc(sizeof(*shbuff));
   if(!shbuff){
@@ -41,8 +43,7 @@ void shared_buffer_free(struct shared_buffer *shbuff){
   free(shbuff->buffer);
 }
 
-//returns num of written bytes
-int shared_buffer_write(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_t count, uint8_t smemb){
+static int __shared_buffer_write(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_t count, uint8_t smemb){
   int ret;
   ret = pthread_mutex_lock(&shbuff->mutex);
   if(ret){
@@ -104,7 +105,7 @@ buff_write_done:
 }
 
 //returns num of read bytes
-int shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_t count, uint8_t smemb){
+static int __shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_t count, uint8_t smemb){
   int ret;
   ret = pthread_mutex_lock(&shbuff->mutex);
   if(ret){
@@ -167,6 +168,36 @@ buff_read_done:
   dbg_printf(DEBUG_LOG_SHAREDBUFFER_IO, "sharedbuffer: read %d\n", to_read);
   return to_read;
 }
+
+
+//returns num of written bytes
+int shared_buffer_write_bulk(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_t count, uint8_t smemb){
+  size_t op_cnt = count * smemb / SINGLE_OP_MAX_SIZE;
+
+  size_t written = 0;
+
+  for(size_t op_i = 0; op_i < op_cnt; op_i++){
+    written += __shared_buffer_write(shbuff, src_buff + (op_i*SINGLE_OP_MAX_SIZE), SINGLE_OP_MAX_SIZE, 1);
+  }
+
+  return written;
+}
+
+//returns num of read bytes
+int shared_buffer_read_bulk(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_t count, uint8_t smemb){
+  size_t op_cnt = count * smemb / SINGLE_OP_MAX_SIZE;
+
+  size_t read = 0;
+
+  for(size_t op_i = 0; op_i < op_cnt; op_i++){
+    read += __shared_buffer_read(shbuff, dest_buff + (op_i*SINGLE_OP_MAX_SIZE), SINGLE_OP_MAX_SIZE, 1);
+  }
+
+  return read;  
+}
+
+
+
 
 /*
 int main(void){

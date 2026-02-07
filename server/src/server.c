@@ -123,7 +123,7 @@ void *alsa_job_threaded(void *arg){
 		);
 		dbg_printf(DEBUG_LOG_ALSA_IO, "captured %ld bytes\n", nbytes);
 
-		nbytes = shared_buffer_write(job_info->sh_buff, tmp_buff, nbytes, 1);
+		nbytes = shared_buffer_write_bulk(job_info->sh_buff, tmp_buff, nbytes, 1);
 	}
 
 	free(tmp_buff);
@@ -144,7 +144,7 @@ void *inet_job_threaded(void *arg){
 	uint8_t *tmp_buff = malloc(job_info->tmp_buff_len);
 
 	while(true){
-		int ret = shared_buffer_read(job_info->sh_buff, tmp_buff, job_info->tmp_buff_len, 1);
+		int ret = shared_buffer_read_bulk(job_info->sh_buff, tmp_buff, job_info->tmp_buff_len, 1);
 
 		int	r = send_data(
 			job_info->sockfd, 

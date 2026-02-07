@@ -18,7 +18,7 @@ struct shared_buffer {
 
 struct shared_buffer *shared_buffer_init(uint32_t shbuff_size);
 void shared_buffer_free(struct shared_buffer *shbuff);
-int shared_buffer_write(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_t count, uint8_t smemb);
-int shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_t count, uint8_t smemb);
+int shared_buffer_write_bulk(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_t count, uint8_t smemb);
+int shared_buffer_read_bulk(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_t count, uint8_t smemb);
 
 #endif

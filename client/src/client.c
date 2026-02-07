@@ -110,7 +110,7 @@ void *alsa_job_threaded(void *arg){
 	}
 
 	while(true){
-		size_t recvd = shared_buffer_read(job_info->sh_buff, tmp_buff, tmp_buff_len, 1);
+		size_t recvd = shared_buffer_read_bulk(job_info->sh_buff, tmp_buff, tmp_buff_len, 1);
 
 		size_t nbytes = playback_data(
 			job_info->sink_info,
@@ -150,7 +150,7 @@ void *inet_job_threaded(void *arg){
 		if(r)
 			dbg_printf(DEBUG_LOG_INET_IO, "sent %d bytes\n", r);
 
-		r = shared_buffer_write(job_info->sh_buff, tmp_buff, r, 1);
+		r = shared_buffer_write_bulk(job_info->sh_buff, tmp_buff, r, 1);
 	}
 
 	free(tmp_buff);
