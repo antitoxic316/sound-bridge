@@ -172,26 +172,30 @@ buff_read_done:
 
 //returns num of written bytes
 int shared_buffer_write_bulk(struct shared_buffer *shbuff, uint8_t *src_buff, uint32_t count, uint8_t smemb){
-  size_t op_cnt = count * smemb / SINGLE_OP_MAX_SIZE;
+  size_t op_full_cnt = count * smemb / SINGLE_OP_MAX_SIZE;
+  size_t op_remain_size = (count * smemb) % SINGLE_OP_MAX_SIZE;
 
   size_t written = 0;
 
-  for(size_t op_i = 0; op_i < op_cnt; op_i++){
-    written += __shared_buffer_write(shbuff, src_buff + (op_i*SINGLE_OP_MAX_SIZE), SINGLE_OP_MAX_SIZE, 1);
+  for(size_t op_i = 0; op_i < op_full_cnt; op_i++){
+    written += __shared_buffer_write(shbuff, src_buff + written, SINGLE_OP_MAX_SIZE, 1);
   }
+  written += __shared_buffer_write(shbuff, src_buff + written, op_remain_size, 1);
 
   return written;
 }
 
 //returns num of read bytes
 int shared_buffer_read_bulk(struct shared_buffer *shbuff, uint8_t *dest_buff, uint32_t count, uint8_t smemb){
-  size_t op_cnt = count * smemb / SINGLE_OP_MAX_SIZE;
+  size_t op_full_cnt = count * smemb / SINGLE_OP_MAX_SIZE;
+  size_t op_remain_size = (count * smemb) % SINGLE_OP_MAX_SIZE;
 
   size_t read = 0;
 
-  for(size_t op_i = 0; op_i < op_cnt; op_i++){
-    read += __shared_buffer_read(shbuff, dest_buff + (op_i*SINGLE_OP_MAX_SIZE), SINGLE_OP_MAX_SIZE, 1);
+  for(size_t op_i = 0; op_i < op_full_cnt; op_i++){
+    read += __shared_buffer_read(shbuff, dest_buff + read, SINGLE_OP_MAX_SIZE, 1);
   }
+  read += __shared_buffer_read(shbuff, dest_buff + read, op_remain_size, 1);
 
   return read;  
 }

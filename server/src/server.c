@@ -178,10 +178,7 @@ int main(int argc, char *argv[])
 	if(ret) return ret;
 
 	//from utils/debug.h
-	debug_type_bitmap = 0x00; //0b00001111 all debug levels on 
-
-
-	printf("%d\n", argc);
+	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
 
 	int sockfd;
 	struct sockaddr cli_addr;
