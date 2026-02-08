@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <alloca.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include <alsa/asoundlib.h>
 
@@ -28,7 +29,7 @@ static int xrun_recovery(snd_pcm_t *handle, int err)
         return 0;
     } else if (err == -ESTRPIPE) {
         while ((err = snd_pcm_resume(handle)) == -EAGAIN)
-            sleep(1);   /* wait until the suspend flag is released */
+          usleep(10000);   /* wait until the suspend flag is released */
         if (err < 0) {
             err = snd_pcm_prepare(handle);
             if (err < 0)
@@ -45,6 +46,13 @@ static snd_pcm_t *init_handle_generic(snd_pcm_t *handle){
 
 	snd_pcm_sw_params_malloc(&sw_params);
 	snd_pcm_sw_params_current(handle, sw_params);
+
+	snd_pcm_uframes_t boundary;
+	snd_pcm_sw_params_get_boundary(sw_params, &boundary);
+	snd_pcm_sw_params_set_start_threshold(handle, sw_params, alsa_dev.period_time * 2);
+
+	snd_pcm_sw_params_set_silence_threshold(handle, sw_params, 0);
+	snd_pcm_sw_params_set_silence_size(handle, sw_params, boundary);
 
 	snd_pcm_hw_params_alloca(&hw_params);
 
