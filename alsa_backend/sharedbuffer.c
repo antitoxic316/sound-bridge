@@ -34,7 +34,7 @@ struct shared_buffer *shared_buffer_init(uint32_t shbuff_size){
   return shbuff;
 
   //from utils/debug.h
-  debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
+  //debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
 }
 
 void shared_buffer_free(struct shared_buffer *shbuff){

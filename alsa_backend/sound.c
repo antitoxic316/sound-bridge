@@ -10,13 +10,13 @@
 
 struct alsa_info alsa_dev = {
   .sink_name = "default",
-  .channels_n = 1,
-  .fmt_size = 2,
-  .period_time = 10000,
-  .buffer_time = 4194304,
-  .format = SND_PCM_FORMAT_S16_LE,
+  .channels_n = 2,
+  .fmt_size = 4,
+  .period_time = 5000,
+  .buffer_time = 50000,
+  .format = SND_PCM_FORMAT_FLOAT_LE,
 	.access_mode = SND_PCM_ACCESS_RW_INTERLEAVED,
-  .rate = 44100
+  .rate = 48000
 };
 
 static int xrun_recovery(snd_pcm_t *handle, int err)

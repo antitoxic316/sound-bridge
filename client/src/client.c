@@ -16,6 +16,7 @@
 #include "sound.h"
 #include "sharedbuffer.h"
 #include "debug.h"
+#include "args.h"
 
 extern struct alsa_info alsa_dev;
 
@@ -168,18 +169,19 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	int ret = initialize_client_from_main(argc, argv);
+	if(ret) return ret;
+
 	//from utils/debug.h
 	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
 
 	int sockfd;
-	const char *port = "4320";
 	
-	client_listen(&sockfd, port);
+	client_listen(&sockfd, client_conf.port);
 	snd_pcm_t *handlep = init_playback_handle();
 
 	struct shared_buffer *sh_buff = shared_buffer_init(alsa_dev.buffer_time);
 
-	int ret;
 	struct inet_thread_job_args inet_job_info = {
 		.sockfd = sockfd,
 		.sh_buff = sh_buff,

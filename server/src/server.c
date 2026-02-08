@@ -22,6 +22,7 @@
 #include "sound.h"
 #include "sharedbuffer.h"
 #include "debug.h"
+#include "args.h"
 
 extern struct alsa_info alsa_dev;
 
@@ -173,25 +174,24 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	int ret = initialize_server_from_main(argc, argv);
+	if(ret) return ret;
+
 	//from utils/debug.h
-	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
+	debug_type_bitmap = 0x00; //0b00001111 all debug levels on 
 
 
 	printf("%d\n", argc);
 
 	int sockfd;
-	char *hostname = "127.0.0.1";
 	struct sockaddr cli_addr;
 	socklen_t cli_addrlen;
-	const char *port = "4320";
 
-	init_server_socket(&sockfd, hostname, port, &cli_addr, &cli_addrlen);
+	init_server_socket(&sockfd, server_conf.cli_hostname, server_conf.port, &cli_addr, &cli_addrlen);
 
 	snd_pcm_t *handlec = init_capture_handle();	
 
 	struct shared_buffer *sh_buff = shared_buffer_init(alsa_dev.buffer_time);
-
-	int ret;
 
 	struct alsa_thread_job_args alsa_job_info = {
 		.sink_info = &alsa_dev,
