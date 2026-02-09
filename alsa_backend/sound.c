@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <alloca.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include <alsa/asoundlib.h>
 
@@ -12,23 +13,26 @@ struct alsa_info alsa_dev = {
   .sink_name = "default",
   .channels_n = 1,
   .fmt_size = 2,
-  .period_time = 10000,
-  .buffer_time = 100000,
+  .period_time = 256, // bigger time causes silent periods
+  .buffer_time = 400000,
   .format = SND_PCM_FORMAT_S16_LE,
 	.access_mode = SND_PCM_ACCESS_RW_INTERLEAVED,
-  .rate = 44100
+  .rate = 48000
 };
 
 static int xrun_recovery(snd_pcm_t *handle, int err)
 {
     if (err == -EPIPE) {    /* under-run */
+				printf("handling underrun\n");
         err = snd_pcm_prepare(handle);
         if (err < 0)
             printf("Can't recovery from underrun, prepare failed: %s\n", snd_strerror(err));
         return 0;
     } else if (err == -ESTRPIPE) {
-        while ((err = snd_pcm_resume(handle)) == -EAGAIN)
-            sleep(1);   /* wait until the suspend flag is released */
+        while ((err = snd_pcm_resume(handle)) == -EAGAIN){
+					printf("suspended overrun\n");
+          usleep(10000);   /* wait until the suspend flag is released */
+				}
         if (err < 0) {
             err = snd_pcm_prepare(handle);
             if (err < 0)
@@ -52,6 +56,14 @@ static snd_pcm_t *init_handle_generic(snd_pcm_t *handle){
 		printf("Failed to retrieve HW params\n");
 		goto handle_init_err_cleanup;
 	}
+
+	snd_pcm_uframes_t boundary;
+	snd_pcm_sw_params_get_boundary(sw_params, &boundary);
+
+	//those three lines are magic that removed silence on underruns
+	snd_pcm_sw_params_set_silence_size(handle, sw_params, alsa_dev.period_time/2);
+	snd_pcm_sw_params_set_silence_threshold(handle, sw_params, boundary);
+	snd_pcm_sw_params_set_stop_threshold(handle, sw_params, boundary);
 
 
 	int error = 0;
@@ -125,7 +137,7 @@ snd_pcm_t *init_playback_handle(){
 }
 
 //returns numbers of bytes read
-size_t capture_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_read){
+size_t capture_data(struct alsa_info *alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_read){
 	/* Note: ALSA Reads/Writes in number of samples! */
 	int frames_read = snd_pcm_readi(handle, buf, frames_to_read);
 	if (frames_read < 0) {
@@ -138,10 +150,10 @@ size_t capture_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, 
 		printf("ALSA State recoverd\n");
 	}
 
-	return frames_read * alsa_dev.fmt_size * alsa_dev.channels_n;
+	return frames_read * alsa_dev->fmt_size * alsa_dev->channels_n;
 }
 
-size_t playback_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_playback){
+size_t playback_data(struct alsa_info *alsa_dev, snd_pcm_t *handle, uint8_t *buf, size_t frames_to_playback){
 	int written = snd_pcm_writei(handle, (void *)buf, frames_to_playback); // 16bit signet format
 
 	if(written < 0){ 
@@ -151,7 +163,8 @@ size_t playback_data(struct alsa_info alsa_dev, snd_pcm_t *handle, uint8_t *buf,
 			exit(2);
 		}
 		printf("ALSA State recoverd\n");
+		written = 0;
 	}
 
-	return written * alsa_dev.fmt_size * alsa_dev.channels_n;
+	return written * alsa_dev->fmt_size * alsa_dev->channels_n;
 }

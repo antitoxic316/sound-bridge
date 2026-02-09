@@ -7,5 +7,6 @@ set(C_FLAGS -Wall -g)
 add_compile_options(${C_LIBS} ${C_FLAGS})
 
 add_subdirectory(alsa_backend)
+add_subdirectory(utils)
 add_subdirectory(client)
 add_subdirectory(server)
