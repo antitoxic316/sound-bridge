@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
 	if(ret) return ret;
 
 	//from utils/debug.h
-	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
+	debug_type_bitmap = 0x00; //0b00001111 all debug levels on 
 
 	int sockfd;
 	struct sockaddr cli_addr;
@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
 		.sockfd = sockfd,
 		.dst_addr = &cli_addr,
 		.dst_addrlen = cli_addrlen,
-		.tmp_buff_len = alsa_dev.period_time,
+		.tmp_buff_len = alsa_dev.period_time * alsa_dev.channels_n * alsa_dev.fmt_size,
 		.sh_buff = sh_buff,
 	};
 

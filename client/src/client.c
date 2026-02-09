@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 	if(ret) return ret;
 
 	//from utils/debug.h
-	debug_type_bitmap = 0x0F; //0b00001111 all debug levels on 
+	debug_type_bitmap = 0x00; //0b00001111 all debug levels on 
 
 	int sockfd;
 	
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
 	struct inet_thread_job_args inet_job_info = {
 		.sockfd = sockfd,
 		.sh_buff = sh_buff,
-		.tmp_buff_len =  alsa_dev.period_time
+		.tmp_buff_len = alsa_dev.period_time * alsa_dev.channels_n * alsa_dev.fmt_size
 	};
 
 	pthread_t inet_thread;

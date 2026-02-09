@@ -37,7 +37,7 @@ static void server_print_help(){
   for(int i = 0; i < SERVER_LONG_OPTS_NUM; i++){
     printf("\r--%s\n", server_long_opts[i].name);
   }
-  printf("-h to print this menu");
+  printf("-h to print this menu\n");
 }
 
 //non zero on error
@@ -90,7 +90,7 @@ static void client_print_help(){
   for(int i = 0; i < CLIENT_LONG_OPTS_NUM; i++){
     printf("\r--%s\n", client_long_opts[i].name);
   }
-  printf("-h to print this menu");
+  printf("-h to print this menu\n");
 }
 
 //non zero on error
