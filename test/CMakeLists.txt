@@ -1,0 +1,10 @@
+add_executable(test_circularBuffer test_circularBuffer.c)
+target_link_libraries(test_circularBuffer PRIVATE alsa_backend)
+target_include_directories(test_circularBuffer PRIVATE ${CMAKE_SOURCE_DIR}/alsa_backend)
+add_test(NAME test_circularBuffer COMMAND test_circularBuffer)
+
+
+add_executable(test_statsIfMessage test_statsIfMessage.c)
+target_link_libraries(test_statsIfMessage PRIVATE core)
+target_include_directories(test_statsIfMessage PRIVATE ${CMAKE_SOURCE_DIR}/core/include)
+add_test(NAME test_statsIfMessage COMMAND test_statsIfMessage)

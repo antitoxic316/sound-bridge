@@ -19,12 +19,15 @@
 #include <pthread.h>
 #include <sched.h>
 
+#include "statistic-if.h"
 #include "sound.h"
 #include "sharedbuffer.h"
 #include "debug.h"
 #include "args.h"
 
 extern struct alsa_info alsa_dev;
+
+struct stats_if sif;
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -36,9 +39,8 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void init_server_socket(int *sockfd, const char* cli_hostname, const char* port, struct sockaddr *cli_addr, socklen_t* cli_addrlen){
+void init_server_socket(int *sockfd, const char* hostname, const char* port, struct sockaddr *cli_addr, socklen_t* cli_addrlen){
 	struct addrinfo hints, *p, *servinfo;
-	struct sigaction sa;
 	int yes=1;
 	int rv;
 
@@ -47,7 +49,7 @@ void init_server_socket(int *sockfd, const char* cli_hostname, const char* port,
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags = AI_PASSIVE; // use my IP
 
-	if ((rv = getaddrinfo(cli_hostname, port, &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		exit(1);
 	}
@@ -85,16 +87,6 @@ int send_data(int sockfd, uint8_t *buf, size_t n, struct sockaddr* dest_addr, so
 	}
 
 	return ret;
-}
-
-
-void sigchld_handler(int s)
-{
-	(void)s; // quiet unused variable warning
-	// waitpid() might overwrite errno, so we save and restore it:
-	int saved_errno = errno;
-	while(waitpid(-1, NULL, WNOHANG) > 0);
-	errno = saved_errno;
 }
 
 struct alsa_thread_job_args {
@@ -147,21 +139,27 @@ void *inet_job_threaded(void *arg){
 	while(true){
 		int ret = shared_buffer_read_bulk(job_info->sh_buff, tmp_buff, job_info->tmp_buff_len, 1);
 
-		int	r = send_data(
+		send_data(
 			job_info->sockfd, 
 			tmp_buff, 
 			ret, 
 			job_info->dst_addr, 
 			job_info->dst_addrlen
 		);
-		//printf("sent %d bytes\n", r);
-
 	}
 
 	free(tmp_buff);
 	return NULL;
 }
 
+void sigchld_handler(int s)
+{
+	(void)s; // quiet unused variable warning
+	// waitpid() might overwrite errno, so we save and restore it:
+	int saved_errno = errno;
+	while(waitpid(-1, NULL, WNOHANG) > 0);
+	errno = saved_errno;
+}
 
 int main(int argc, char *argv[])
 {
@@ -174,28 +172,34 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	int ret = initialize_server_from_main(argc, argv);
-	if(ret) return ret;
-
 	//from utils/debug.h
 	debug_type_bitmap = 0x00; //0b00001111 all debug levels on 
+
+	int ret = initialize_server_from_main(argc, argv);
+	if(ret) return ret;
+	
+	alsa_dev.sink_name = server_conf.alsa_sink;
+	alsa_dev.channels_n = server_conf.alsa_channels_n;
+	alsa_dev.fmt_size = server_conf.alsa_fmtsize;
+	alsa_dev.period_time = server_conf.alsa_period_time;
+	alsa_dev.format = server_conf.alsa_fmt;
+	alsa_dev.rate = server_conf.alsa_rate;
 
 	int sockfd;
 	struct sockaddr cli_addr;
 	socklen_t cli_addrlen;
-
-	init_server_socket(&sockfd, server_conf.cli_hostname, server_conf.port, &cli_addr, &cli_addrlen);
-
-	snd_pcm_t *handlec = init_capture_handle();	
+	init_server_socket(&sockfd, server_conf.hostname, server_conf.port, &cli_addr, &cli_addrlen);
+	ret = stats_if_init(&sif);
+	if (ret == -1) return ret;
 
 	struct shared_buffer *sh_buff = shared_buffer_init(alsa_dev.buffer_time);
 
+	snd_pcm_t *handlec = init_capture_handle();	
 	struct alsa_thread_job_args alsa_job_info = {
 		.sink_info = &alsa_dev,
 		.handlec = handlec,
 		.sh_buff = sh_buff,
 	};
-
 	pthread_t alsa_thread;
 	ret = pthread_create(
 		&alsa_thread, 
@@ -208,7 +212,6 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-
 	struct inet_thread_job_args inet_job_info = {
 		.sockfd = sockfd,
 		.dst_addr = &cli_addr,
@@ -216,7 +219,6 @@ int main(int argc, char *argv[])
 		.tmp_buff_len = alsa_dev.period_time * alsa_dev.channels_n * alsa_dev.fmt_size,
 		.sh_buff = sh_buff,
 	};
-
 	pthread_t inet_thread;
 	ret = pthread_create(
 		&inet_thread, 
@@ -234,6 +236,8 @@ int main(int argc, char *argv[])
 
 	close(sockfd);
 	shared_buffer_free(sh_buff);
+
+	stats_if_exit(&sif);
 	
 	return 0;
 }

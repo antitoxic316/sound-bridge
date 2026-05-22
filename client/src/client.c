@@ -13,12 +13,15 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
+#include "statistic-if.h"
 #include "sound.h"
 #include "sharedbuffer.h"
 #include "debug.h"
 #include "args.h"
 
 extern struct alsa_info alsa_dev;
+
+struct stats_if sif;
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -82,16 +85,6 @@ int recieve_data(int sockfd, uint8_t *buf, size_t n){
 
 	return ret;
 }
-
-void sigchld_handler(int s)
-{
-	(void)s; // quiet unused variable warning
-	// waitpid() might overwrite errno, so we save and restore it:
-	int saved_errno = errno;
-	while(waitpid(-1, NULL, WNOHANG) > 0);
-	errno = saved_errno;
-}
-
 
 struct alsa_thread_job_args {
 	struct alsa_info *sink_info;
@@ -158,6 +151,17 @@ void *inet_job_threaded(void *arg){
 	return NULL;
 }
 
+
+void sigchld_handler(int s)
+{
+	(void)s; // quiet unused variable warning
+	// waitpid() might overwrite errno, so we save and restore it:
+	int saved_errno = errno;
+	while(waitpid(-1, NULL, WNOHANG) > 0);
+	errno = saved_errno;
+}
+
+
 int main(int argc, char *argv[])
 {
 	struct sigaction sa;
@@ -171,6 +175,17 @@ int main(int argc, char *argv[])
 
 	int ret = initialize_client_from_main(argc, argv);
 	if(ret) return ret;
+
+	ret = stats_if_init(&sif);
+	if (ret == -1) return ret;
+
+	alsa_dev.sink_name = server_conf.alsa_sink;
+	alsa_dev.channels_n = server_conf.alsa_channels_n;
+	alsa_dev.fmt_size = server_conf.alsa_fmtsize;
+	alsa_dev.period_time = server_conf.alsa_period_time;
+	alsa_dev.format = server_conf.alsa_fmt;
+	alsa_dev.rate = server_conf.alsa_rate;
+
 
 	//from utils/debug.h
 	debug_type_bitmap = 0x00; //0b00001111 all debug levels on 

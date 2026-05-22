@@ -5,17 +5,25 @@
 #include <stdlib.h>
 #include <getopt.h>
 
+#include "sound.h" //for format definitions
+
 struct server_config {
-  char *cli_hostname;
+  char *hostname;
   char *port;
+  char *alsa_sink;
+  uint32_t alsa_channels_n;
+  uint32_t alsa_rate;
+  snd_pcm_uframes_t alsa_period_time;
+  snd_pcm_format_t alsa_fmt;
+  uint32_t alsa_fmtsize;
 };
 
 extern struct server_config server_conf;
 
-#define SERVER_LONG_OPTS_NUM 2
+#define SERVER_LONG_OPTS_NUM 7
 struct option server_long_opts[SERVER_LONG_OPTS_NUM + 1] = {
   {
-    .name = "cli-hostname",
+    .name = "hostname",
     .has_arg = required_argument,
     .flag = 0,
     .val = 0
@@ -23,6 +31,37 @@ struct option server_long_opts[SERVER_LONG_OPTS_NUM + 1] = {
   {
     .name = "port",
     .has_arg = required_argument,
+    .flag = 0,
+    .val = 0
+  },
+  //alsa args
+  {
+    .name = "alsa-sink",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-rate",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-period-time",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-channels",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-format",
+    .has_arg = optional_argument,
     .flag = 0,
     .val = 0
   },
@@ -36,14 +75,51 @@ const char *server_optstring = "h0";
 
 struct client_config {
   char *port;
+  char *alsa_sink;
+  uint32_t alsa_channels_n;
+  uint32_t alsa_rate;
+  snd_pcm_uframes_t alsa_period_time;
+  snd_pcm_format_t alsa_fmt;
+  uint32_t alsa_fmtsize;
 };
 extern struct client_config client_conf;
 
-#define CLIENT_LONG_OPTS_NUM 1
+#define CLIENT_LONG_OPTS_NUM 6
 struct option client_long_opts[CLIENT_LONG_OPTS_NUM + 1] = {
   {
     .name = "port",
     .has_arg = required_argument,
+    .flag = 0,
+    .val = 0
+  },
+  //alsa args
+  {
+    .name = "alsa-sink",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-rate",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-period-time",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-channels",
+    .has_arg = optional_argument,
+    .flag = 0,
+    .val = 0
+  },
+  {
+    .name = "alsa-format",
+    .has_arg = optional_argument,
     .flag = 0,
     .val = 0
   },

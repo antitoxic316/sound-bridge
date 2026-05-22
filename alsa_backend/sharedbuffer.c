@@ -88,7 +88,6 @@ static int __shared_buffer_write(struct shared_buffer *shbuff, uint8_t *src_buff
     shbuff->head += to_write;
   }
 
-buff_write_done:
   ret = pthread_cond_signal(&shbuff->not_empty_condition);
   if(ret) {
     perror("pthread_cond_signal");
@@ -153,7 +152,6 @@ static int __shared_buffer_read(struct shared_buffer *shbuff, uint8_t *dest_buff
     shbuff->tail += to_read;
   }
 
-buff_read_done:
   ret = pthread_cond_signal(&shbuff->not_full_condition);
   if(ret) {
     perror("pthread_cond_signal");
@@ -199,74 +197,3 @@ int shared_buffer_read_bulk(struct shared_buffer *shbuff, uint8_t *dest_buff, ui
 
   return read;  
 }
-
-
-
-
-/*
-int main(void){
-  struct shared_buffer *shbuff;
-
-  shbuff = shared_buffer_init(11);
-
-  shared_buffer_write(shbuff, "fff", 3, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", shbuff->buffer[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-  char tst_buff[11];
-  shared_buffer_read(shbuff, tst_buff, 3, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", tst_buff[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-
-  shared_buffer_write(shbuff, "gfhdf", 5, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", shbuff->buffer[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-
-  shared_buffer_write(shbuff, "sssss", 5, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", shbuff->buffer[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-
-
-  shared_buffer_read(shbuff, tst_buff, 11, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", tst_buff[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-
-
-  shared_buffer_write(shbuff, "\0\0\0\0\0\0\0\0", 11, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", shbuff->buffer[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-
-  shared_buffer_read(shbuff, tst_buff, 1, 1);
-  for(int i = 0; i < 11; i++){
-    printf("%d  ", tst_buff[i]);
-  }
-  printf("\n");
-  printf("tail: %d  head %d\n", shbuff->tail, shbuff->head);
-
-
-  shared_buffer_free(shbuff);
-}
-*/
